@@ -253,8 +253,8 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: 0 30px 80px rgba(17, 17, 17, 0.18);
-  border: 1px solid var(--line);
-  background: #0d0d0d;
+  border: 1px solid transparent;
+  background: transparent;
 }
 .demo-video {
   width: 100%;
