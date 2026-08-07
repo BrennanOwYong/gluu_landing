@@ -1,18 +1,19 @@
 /**
- * Gluu waitlist -> Airtable proxy
+ * Gluu waitlist -> Google Sheets proxy
  *
- * Deploy this as a Cloudflare Worker (free tier is plenty for a waitlist).
- * It exists so the Airtable API token never has to live in the browser.
+ * Deployed as a Cloudflare Worker. Forwards each waitlist signup to a
+ * Google Apps Script Web App, which appends [Email, Date, Time] to the sheet.
+ * Server-to-server (Worker -> Apps Script) avoids browser CORS issues that
+ * Apps Script Web Apps have when called directly from client JS.
  *
  * SETUP:
- * 1. Go to https://dash.cloudflare.com -> Workers & Pages -> Create -> Worker
- * 2. Paste this file in as the Worker's code
- * 3. Go to Settings -> Variables -> add these as *encrypted* environment variables:
- *      AIRTABLE_TOKEN   = your Personal Access Token (never put this in code)
- *      AIRTABLE_BASE_ID = appXXXXXXXXXXXXXX
- *      AIRTABLE_TABLE   = Waitlist
- * 4. Deploy. Copy the worker's URL (looks like https://gluu-waitlist.yourname.workers.dev)
- * 5. Put that URL into script.js where WAITLIST_ENDPOINT is defined
+ * 1. Go to https://dash.cloudflare.com -> Workers & Pages -> your "gluu-waitlist" worker
+ * 2. Paste this file in as the Worker's code (replacing the old Airtable version)
+ * 3. Go to Settings -> Variables -> add:
+ *      SHEETS_WEBHOOK_URL = the Apps Script Web App URL from google-apps-script.gs setup
+ *    (Plain env var is fine here — it's not a secret, just an unguessable URL.)
+ * 4. Deploy. The public Worker URL (gluu-waitlist.shennylaurencia-work.workers.dev)
+ *    stays the same, so script.js on the site doesn't need to change.
  */
 
 export default {
@@ -48,26 +49,16 @@ export default {
       });
     }
 
-    const airtableRes = await fetch(
-      `https://api.airtable.com/v0/${env.AIRTABLE_BASE_ID}/${encodeURIComponent(env.AIRTABLE_TABLE)}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${env.AIRTABLE_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fields: {
-            Email: email,
-            Source: 'Landing Page',
-          },
-        }),
-      }
-    );
+    const sheetsRes = await fetch(env.SHEETS_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+      redirect: 'follow',
+    });
 
-    if (!airtableRes.ok) {
-      const errText = await airtableRes.text();
-      return new Response(JSON.stringify({ error: 'Airtable write failed', detail: errText }), {
+    if (!sheetsRes.ok) {
+      const errText = await sheetsRes.text();
+      return new Response(JSON.stringify({ error: 'Sheets write failed', detail: errText }), {
         status: 502,
         headers: { 'Access-Control-Allow-Origin': '*' },
       });
